@@ -64,17 +64,27 @@ class Point:
         return f'Point: ({self.x}, {self.y})'
 
 class Snake:
-    direction = 0
     movements = 0
     moves_without_eat = 0
 
     def __init__(self, parent1=None, parent2=None):
-        self.head = Point(5,4)
-        self.body = [self.head, Point(5,5), Point(5,6), Point(5,7)]
+        self.set_head()
+        self.set_body()
         self.locate_food()
         self.direction = 0
         self.board = self.create_board()
         self.brain = snake_brain.Brain(parent1, parent2)
+
+    def set_head(self):
+        middle = SIZE // 2
+        self.head = Point(middle, middle)
+
+    def set_body(self):
+        self.body = [self.head]
+        directions = [[0,1, 0], [1,0, 3], [0,-1, 2], [-1,0, 1]]
+        x, y, self.direction = random.choice(directions)
+        for i in range(1, 5):
+            self.body.append(Point(self.head.x + (i*x), self.head.y + (i*y)))
 
     def create_board(self):
         # Create board
@@ -205,11 +215,9 @@ class Snake:
 
     def reset(self):
         self.movements = 0
-        self.head = Point(5,4)
-        self.body = [self.head, Point(5,5), Point(5,6), Point(5,7)]
+        self.set_head()
+        self.set_body()
         self.locate_food()
-        self.direction = 0
-        self.board = self.create_board()
         self.moves_without_eat = 0
 
 
@@ -235,7 +243,7 @@ def return_random_snake(snakes):
 
 # Define number of generations
 GENERATIONS = 1000
-POPULATION = 100
+POPULATION = 30
 SELECTED = 60
 
 # Create a list of random snakes for first generation
@@ -267,13 +275,16 @@ for g in range(GENERATIONS):
                     pressed_key = True
                     # W -> Up; S -> Down; A -> Left; D -> Right
                     if event.key == pygame.K_UP or event.key == ord('w'):
+                        dir = 0
+                    if event.key == pygame.K_RIGHT or event.key == ord('d'):
+                        dir = 1
+                    if event.key == pygame.K_DOWN or event.key == ord('s'):
+                        dir = 2
+                    if event.key == pygame.K_LEFT or event.key == ord('a'):
+                        dir = 3
+                    if event.key == ord('v'):
+                        pressed_key = False
                         visualize_generation = not visualize_generation
-                    # if event.key == pygame.K_RIGHT or event.key == ord('d'):
-                    #     dir = 1
-                    # if event.key == pygame.K_DOWN or event.key == ord('s'):
-                    #     dir = 2
-                    # if event.key == pygame.K_LEFT or event.key == ord('a'):
-                    #     dir = 3
 
                     # Esc -> Create event to quit the game
                     if event.key == pygame.K_ESCAPE:
@@ -290,6 +301,9 @@ for g in range(GENERATIONS):
             data = snake.info()
             desition = snake.brain.decide(data)
             snake.move(desition)
+            # if pressed_key:
+            #     snake.move(dir)
+
             # Check if snake has died
             if snake.has_died():
                 w = snake.brain.model.get_weights()
@@ -329,17 +343,3 @@ for g in range(GENERATIONS):
 
 for snake in snakes:
     print(f'The size of this snake is {len(snake.body)} and died in {snake.movements} movements')
-
-
-'''
-ww = snakes[0].brain.model.get_weights()
-for www in ww:
-    print(www.shape)
-
-# Sizes
-(14, 7)
-(7,)
-(7, 4)
-(4,)
-
-'''

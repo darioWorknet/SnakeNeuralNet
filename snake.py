@@ -1,47 +1,12 @@
-import sys
-import pygame
-import random
+from brain import Brain
 import math
+import random
 import numpy as np
-import snake_brain
-from datetime import datetime
 
 
-# Difficulty settings
-speed = 100
 
-# Window size
-SIZE = 15
-PIX_SIZE = 25
-FRAME_SIZE = SIZE * PIX_SIZE
-
-# Checks for errors encountered
-check_errors = pygame.init()
-# pygame.init() example output -> (6, 0)
-# second number in tuple gives number of errors
-if check_errors[1] > 0:
-    print(f'[!] Had {check_errors[1]} errors when initialising game, exiting...')
-    sys.exit(-1)
-else:
-    print('[+] Game successfully initialised')
-
-
-# Initialise game window
-pygame.display.set_caption('Snake Eater')
-game_window = pygame.display.set_mode((FRAME_SIZE, FRAME_SIZE))
-
-
-# Colors (R, G, B)
-black = pygame.Color(0, 0, 0)
-white = pygame.Color(255, 255, 255)
-red = pygame.Color(255, 0, 0)
-green = pygame.Color(0, 255, 0)
-blue = pygame.Color(0, 0, 255)
-
-
-# FPS (frames per second) controller
-fps_controller = pygame.time.Clock()
-
+# Game config
+SIZE = 15 # Stands for 'n' x 'n' board
 
 
 class Point:
@@ -63,41 +28,42 @@ class Point:
     def __str__(self):
         return f'Point: ({self.x}, {self.y})'
 
+
+
 class Snake:
     movements = 0
-    moves_without_eat = 0
+    movements_without_eat = 0
+    turns = 0
+    reproducible = True
 
-    def __init__(self, parent1=None, parent2=None):
-        self.set_head()
+    def __init__(self):
+        self.brain = Brain()
+        self.head = Point(SIZE//2, SIZE//2)
         self.set_body()
+        self.set_board()
         self.locate_food()
-        self.direction = 0
-        self.board = self.create_board()
-        self.brain = snake_brain.Brain(parent1, parent2)
-
-    def set_head(self):
-        middle = SIZE // 2
-        self.head = Point(middle, middle)
 
     def set_body(self):
-        self.body = [self.head]
+        self.body = []
         directions = [[0,1, 0], [1,0, 3], [0,-1, 2], [-1,0, 1]]
         x, y, self.direction = random.choice(directions)
         for i in range(1, 5):
             self.body.append(Point(self.head.x + (i*x), self.head.y + (i*y)))
 
-    def create_board(self):
-        # Create board
-        board = []
+    def set_board(self):
+        self.board = []
         for i in range(SIZE):
             for j in range(SIZE):
-                board.append(Point(i,j))
-        return board
+                self.board.append(Point(i,j))
 
     def move(self, dir):
         # Store prevoius head position
         self.previous_head = self.head
         self.movements += 1
+        self.movements_without_eat += 1
+        # If direction has changed
+        if dir != self.direction:
+            self.turns += 1
         # Avoid forbidden directions
         if abs(self.direction - dir) != 2:
             self.direction = dir
@@ -105,17 +71,18 @@ class Snake:
             return
         # Moving process, head to new position
         if self.direction == 0:
-            self.head = Point(self.body[0].x, self.body[0].y - 1)
+            self.head = Point(self.head.x, self.head.y - 1)
         elif self.direction == 1:
-            self.head = Point(self.body[0].x + 1, self.body[0].y)
+            self.head = Point(self.head.x + 1, self.head.y)
         elif self.direction == 2:
-            self.head = Point(self.body[0].x, self.body[0].y + 1)
+            self.head = Point(self.head.x, self.head.y + 1)
         elif self.direction == 3:
-            self.head = Point(self.body[0].x - 1, self.body[0].y)
+            self.head = Point(self.head.x - 1, self.head.y)
         # Check if snake has found food
         if not self.has_eaten():
             self.body.pop()
-        self.body.insert(0, self.head)
+        self.body.insert(0, self.previous_head)
+
 
     def has_eaten(self):
         if self.head.x == self.food.x and self.head.y == self.food.y:
@@ -136,27 +103,15 @@ class Snake:
         if self.previous_head == self.head:
             return True
         # If snake is taking too long to feed, kill the snake
-        if self.moves_without_eat > 100:
+        if self.movements_without_eat > 50:
+            self.reproducible = False
             return True
         # Check if snake hits itself
-        if self.head in self.body[1:]:
+        if self.head in self.body:
             return True
         # Check if snake hits board edge
         if self.head not in self.board:
             return True
-
-    def draw(self):
-        # Draw background
-        game_window.fill(black)
-        # Draw head
-        pygame.draw.rect(game_window, red, pygame.Rect(self.head.x*PIX_SIZE, self.head.y*PIX_SIZE, PIX_SIZE-1, PIX_SIZE-1))
-        # Draw body
-        for b in self.body[1:]:
-            pygame.draw.rect(game_window, green, pygame.Rect(b.x*PIX_SIZE, b.y*PIX_SIZE, PIX_SIZE-1, PIX_SIZE-1))
-        # Draw food
-        pygame.draw.rect(game_window, blue, pygame.Rect(self.food.x*PIX_SIZE, self.food.y*PIX_SIZE, PIX_SIZE-1, PIX_SIZE-1))
-        # Refresh game screen
-        pygame.display.update()
 
     def info(self):
         # Distance to board edge
@@ -211,135 +166,15 @@ class Snake:
         return (data - min) / (max - min)
 
     def score(self):
-        return len(self.body)*1 + self.movements*0.1
+        if not self.reproducible:
+            return 0
+        return len(self.body)*1 + self.movements*0.1 + self.turns * 0.02
 
     def reset(self):
         self.movements = 0
-        self.set_head()
+        self.turns = 0
+        self.head = Point(SIZE//2, SIZE//2)
         self.set_body()
         self.locate_food()
-        self.moves_without_eat = 0
-
-
-
-
-def return_random_snake(snakes):
-    total_score = sum([x.score() for x in snakes])
-    random_int = random.randint(0, int(total_score))
-    cumulative_score = 0
-    for snake in snakes:
-        cumulative_score += snake.score()
-        if cumulative_score >= random_int:
-            return snake
-    return snakes[0]
-
-
-
-
-
-
-
-# Main logic
-
-# Define number of generations
-GENERATIONS = 1000
-POPULATION = 30
-SELECTED = 60
-
-# Create a list of random snakes for first generation
-snakes = []
-for i in range(POPULATION):
-    snakes.append(Snake())
-
-# Run generations
-for g in range(GENERATIONS):
-    time_start = datetime.now()
-
-    print(f'Generation {g} starting at {time_start.strftime("%H:%M:%S")}')
-    visualize_generation = False
-
-    # Play population
-    for snake in snakes:
-
-        # Reset snake score and position
-        snake.reset()
-
-        while True:
-            pressed_key = False
-            for event in pygame.event.get():
-                if event.type == pygame.QUIT:
-                    pygame.quit()
-                    sys.exit()
-                # Whenever a key is pressed down
-                elif event.type == pygame.KEYDOWN:
-                    pressed_key = True
-                    # W -> Up; S -> Down; A -> Left; D -> Right
-                    if event.key == pygame.K_UP or event.key == ord('w'):
-                        dir = 0
-                    if event.key == pygame.K_RIGHT or event.key == ord('d'):
-                        dir = 1
-                    if event.key == pygame.K_DOWN or event.key == ord('s'):
-                        dir = 2
-                    if event.key == pygame.K_LEFT or event.key == ord('a'):
-                        dir = 3
-                    if event.key == ord('v'):
-                        pressed_key = False
-                        visualize_generation = not visualize_generation
-
-                    # Esc -> Create event to quit the game
-                    if event.key == pygame.K_ESCAPE:
-                        pygame.event.post(pygame.event.Event(pygame.QUIT))
-
-
-            # Draw if press W or we are at last 10 generations
-            if visualize_generation or g > GENERATIONS - 10:
-                speed = 15
-                snake.draw()
-            else:
-                speed = 100
-            # Brain logic
-            data = snake.info()
-            desition = snake.brain.decide(data)
-            snake.move(desition)
-            # if pressed_key:
-            #     snake.move(dir)
-
-            # Check if snake has died
-            if snake.has_died():
-                w = snake.brain.model.get_weights()
-                # Store the weights
-                # snake_brain.model.save_weights('snake_brain.h5')
-                snake.brain.model.set_weights(w)
-                # print(f'Snake died in {snake.movements} movements with a size of {len(snake.body)}')
-                break
-
-            # Refresh rate
-            fps_controller.tick(speed)
-
-
-    # Sort list of snakes by score
-    snakes.sort(key=lambda x: x.score(), reverse=True)
-    print(f'Best snake has a score of {snakes[0].score()} with {snakes[0].movements} movements and a length of {len(snakes[0].body)}')
-    # Print elapsed time
-    time_end = datetime.now()
-    print(f'Generation {g} ended in {time_end.minute - time_start.minute} minutes, {time_end.second - time_start.second} second\n')
-
-    # Get best snakes for next generation
-    best_snakes = snakes[:SELECTED]
-
-    
-    # Create new generation
-    childs = []
-    for i in range(POPULATION - SELECTED):
-        parent1 = return_random_snake(snakes)
-        parent2 = return_random_snake(snakes)
-        child = Snake(parent1, parent2)
-        childs.append(child)
-
-
-    # Join best snakes and childs
-    snakes = best_snakes + childs
-
-
-for snake in snakes:
-    print(f'The size of this snake is {len(snake.body)} and died in {snake.movements} movements')
+        self.movements_without_eat = 0
+        self.reproducible = True

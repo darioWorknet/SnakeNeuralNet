@@ -63,18 +63,3 @@ class Brain(nn.Module):
         # Set the weights to the moodel.
         for param, w in zip(self.model.parameters(), weights):
             param.data = nn.parameter.Parameter(w)
-
-
-
-
-
-
-        
-
-
-
-
-
-
-
-

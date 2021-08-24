@@ -3,10 +3,25 @@ import math
 import random
 import numpy as np
 
+'''
+Make a new system of reward snake each movement
+    Getting close of food +1
+    Getting close to walls -1
 
+
+    Calculate:
+        Distance to food: every step
+        Distance to the wall in front: every step
+'''
 
 # Game config
 SIZE = 15 # Stands for 'n' x 'n' board
+
+DEBUG = False
+
+def dprint(msg):
+    if DEBUG:
+        print(msg)
 
 
 class Point:
@@ -31,17 +46,19 @@ class Point:
 
 
 class Snake:
-    movements = 0
-    movements_without_eat = 0
-    turns = 0
-    reproducible = True
 
-    def __init__(self):
-        self.brain = Brain()
+    def __init__(self, has_brain = False):
+        if not has_brain:
+            self.brain = Brain()
         self.head = Point(SIZE//2, SIZE//2)
         self.set_body()
         self.set_board()
         self.locate_food()
+        self.movements = 0
+        self.movements_without_eat = 0
+        self.turns = 0
+        self.reproducible = True
+        self.score = 0.0
 
     def set_body(self):
         self.body = []
@@ -59,6 +76,7 @@ class Snake:
     def move(self, dir):
         # Store prevoius head position
         self.previous_head = self.head
+        self.previous_direction = self.direction
         self.movements += 1
         self.movements_without_eat += 1
         # If direction has changed
@@ -70,48 +88,78 @@ class Snake:
         else:
             return
         # Moving process, head to new position
-        if self.direction == 0:
-            self.head = Point(self.head.x, self.head.y - 1)
-        elif self.direction == 1:
-            self.head = Point(self.head.x + 1, self.head.y)
-        elif self.direction == 2:
-            self.head = Point(self.head.x, self.head.y + 1)
-        elif self.direction == 3:
-            self.head = Point(self.head.x - 1, self.head.y)
+        movements = [[0,-1], [1,0], [0,1], [-1,0]]
+        x, y = movements[self.direction]
+        self.head = Point(self.head.x + x, self.head.y + y)
         # Check if snake has found food
         if not self.has_eaten():
             self.body.pop()
         self.body.insert(0, self.previous_head)
+        self.update_score()
 
 
     def has_eaten(self):
         if self.head.x == self.food.x and self.head.y == self.food.y:
             self.locate_food()
             self.moves_without_eat = 0
+            dprint("You eated food")
+            self.score += 10
             return True
 
     def locate_food(self):
-        placed = False
-        while not placed:
+        while True:
             food = Point(random.randint(0,SIZE-1), random.randint(0,SIZE-1))
             if food not in self.body and food != self.head:
-                placed = True
-        self.food = food
+                self.food = food
+                break
 
     def has_died(self):
         # If snake has no moved, model has to improve, so we kill the snake
         if self.previous_head == self.head:
+            self.score -= 15
             return True
         # If snake is taking too long to feed, kill the snake
         if self.movements_without_eat > 50:
-            self.reproducible = False
+            self.score -= 10
             return True
         # Check if snake hits itself
         if self.head in self.body:
             return True
         # Check if snake hits board edge
         if self.head not in self.board:
+            self.score -= 5
             return True
+        
+
+    def update_score(self):
+        # Check if snake is getting closer to food
+        prev_distance_to_food = self.previous_head.distance(self.food)
+        curr_distance_to_food = self.head.distance(self.food)
+        if curr_distance_to_food < prev_distance_to_food:
+            dprint("Going closer to food")
+            self.score += 1
+            return
+        # Check if snake is not getting closer to food
+        # Check if is going closer of further from walls
+        prev_distance_to_wall = self.distance_to_front_wall(self.previous_head, self.previous_direction)
+        curr_distance_to_wall = self.distance_to_front_wall(self.head, self.direction)
+        if curr_distance_to_wall > prev_distance_to_wall:
+            dprint("Going further to walls")
+            self.score -= 0.1
+        else:
+            dprint("Going closer to walls")
+            self.score -= 0.2
+
+    def distance_to_front_wall(self, head, direction):
+        if direction == 0:
+            return head.y
+        elif direction == 1:
+            return SIZE - head.x - 1
+        elif direction == 2:
+            return SIZE - head.y - 1
+        elif direction == 3:
+            return head.x
+
 
     def info(self):
         # Distance to board edge
@@ -124,7 +172,7 @@ class Snake:
         right = self.norm(right, SIZE, 0)
         bottom = self.norm(bottom, SIZE, 0)
         left = self.norm(left, SIZE, 0)
-        # print(f'{top=} {right=} {bottom=} {left=}')
+        dprint(f'{top=} {right=} {bottom=} {left=}')
         # Distance and angle to food
         distance = self.head.distance(self.food)
         angle = self.head.angle(self.food)
@@ -132,10 +180,10 @@ class Snake:
         max = math.sqrt(SIZE ** 2 + SIZE ** 2)
         distance = self.norm(distance, max, 0)
         # angle = self.norm(angle, 360, 0)
-        # print(f'distance=%.2f {angle=}' % distance)
+        dprint(f'distance=%.2f {angle=}' % distance)
         # Distance to itself in 8 directions
         d1, d2, d3, d4, d5, d6, d7, d8 = self.distances()
-        # print(f'd1=%.2f d2=%.2f d3=%.2f d4=%.2f d5=%.2f d6=%.2f d7=%.2f d8=%.2f\n' % (d1, d2, d3, d4, d5, d6, d7, d8))
+        dprint(f'd1=%.2f d2=%.2f d3=%.2f d4=%.2f d5=%.2f d6=%.2f d7=%.2f d8=%.2f\n' % (d1, d2, d3, d4, d5, d6, d7, d8))
         data = np.array([[top, right, bottom, left, distance, angle, d1, d2, d3, d4, d5, d6, d7, d8]], dtype=np.float16)
         return data
 
@@ -165,16 +213,11 @@ class Snake:
     def norm(self, data, max, min):
         return (data - min) / (max - min)
 
-    def score(self):
-        if not self.reproducible:
-            return 0
-        return len(self.body)*1 + self.movements*0.1 + self.turns * 0.02
+    def get_score(self):
+        # Prevent score to be 0 or below for further calculations
+        if self.score < 1:
+            return 1
+        return self.score
 
     def reset(self):
-        self.movements = 0
-        self.turns = 0
-        self.head = Point(SIZE//2, SIZE//2)
-        self.set_body()
-        self.locate_food()
-        self.movements_without_eat = 0
-        self.reproducible = True
+        self.__init__(has_brain=True)

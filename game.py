@@ -59,9 +59,20 @@ def draw(snake):
     pygame.display.update()
 
 
+def wait_until_press_enter():
+    ''' Wait with black screen until a key is pressed '''
+    game_window.fill(black)
+    pygame.display.update()
+    while True:
+        event = pygame.event.wait()
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_RETURN:
+                return
+
 
 def listen_events():
     ''' Listen for key presses '''
+    dir = None
     for event in pygame.event.get():
         if event.type == pygame.QUIT:
             pygame.quit()
@@ -76,10 +87,26 @@ def listen_events():
             if event.key == pygame.K_DOWN or event.key == ord('s'):
                 dir = 2
             if event.key == pygame.K_LEFT or event.key == ord('a'):
-                dir = 3
+                dir = 3   
 
             # Esc -> Create event to quit the game
             if event.key == pygame.K_ESCAPE:
                 pygame.event.post(pygame.event.Event(pygame.QUIT))
+            return dir
     # Refresh rate
     fps_controller.tick(speed)
+
+
+
+if __name__ == '__main__':
+    from snake import Snake
+    snake = Snake()
+
+    game_start()
+
+    while True:
+        draw(snake)
+        dir = listen_events()
+        if dir is not None:
+            snake.move(dir)
+            print(snake.get_score())
